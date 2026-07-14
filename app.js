@@ -14,6 +14,11 @@ const App = (() => {
   };
 
   const DEFAULT_CURRENCY = "COP";
+  const REQUEST_IMAGES = {
+    waiter: "images/mesero.png",
+    bill: "images/check.png"
+  };
+  const RECEIPT_SOUND = "sound/receipt-received.mp3";
   const ASSISTANT_MENU = [
     { name: "Camarón Tradicional", prices: { 8: 24000, 12: 26000, 16: 31000 }, detail: "Camarón, cebolla, ajo, aceite de oliva, salsa de tomate, mayonesa, syrup, limón y cilantro." },
     { name: "Camarón Crema de Maíz", prices: { 8: 24000, 12: 27000, 16: 31000 }, detail: "Camarón, cebolla, ajo, crema de maíz, granos de maíz tiernos, syrup, limón y cilantro." },
@@ -589,11 +594,33 @@ const App = (() => {
     return null;
   };
 
+  const billTicketId = (request) => `#${String(request?.id || "").slice(0, 8).toUpperCase()}`;
+
+  const billDateParts = (value) => {
+    const date = new Date(value || Date.now());
+    return {
+      date: date.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" }).replace(".", ""),
+      time: date.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })
+    };
+  };
+
+  const playReceiptSound = async (requestId) => {
+    if (!requestId || localStorage.getItem(`receipt_sound_${requestId}`) === "1") return;
+    const audio = new Audio(RECEIPT_SOUND);
+    audio.volume = 1;
+    try {
+      await audio.play();
+      localStorage.setItem(`receipt_sound_${requestId}`, "1");
+    } catch (error) {
+      // Browsers can block audio until the client interacts with the page.
+    }
+  };
+
   const latestClientBill = () =>
     state.clientRequests.find(
       (request) =>
         request.request_type === "bill" &&
-        ["acknowledged", "resolved"].includes(request.status) &&
+        request.status === "acknowledged" &&
         parseBillMessage(request.message)
     );
 
@@ -607,34 +634,70 @@ const App = (() => {
       box.innerHTML = "";
       return;
     }
+    playReceiptSound(request.id);
+    const sent = billDateParts(bill.sent_at || request.acknowledged_at || request.created_at);
     box.hidden = false;
     box.innerHTML = `
-      <div class="chat-thread">
-        <div class="chat-bubble staff">
-          <span>${icon("receipt-text", 16)} Cuenta enviada</span>
-          <strong>${bill.business_name}</strong>
-          <div class="receipt-lines">
+      <div class="client-receipt-overlay">
+        <article class="client-receipt-ticket" role="dialog" aria-modal="true" aria-label="Cuenta enviada">
+          <div class="receipt-confetti">${request.status === "resolved" ? "✓" : "!"}</div>
+          <h2>${request.status === "resolved" ? "Gracias" : "Cuenta lista"}</h2>
+          <p>${request.status === "resolved" ? "Tu confirmación fue recibida correctamente." : "El equipo envió el recibo de tu mesa."}</p>
+
+          <div class="receipt-dash"></div>
+
+          <div class="receipt-ticket-grid">
+            <div>
+              <span>Ticket ID</span>
+              <strong>${billTicketId(request)}</strong>
+            </div>
+            <div>
+              <span>Total</span>
+              <strong>${money(bill.total, bill.currency)}</strong>
+            </div>
+            <div>
+              <span>Fecha y hora</span>
+              <strong>${sent.date} | ${sent.time}</strong>
+            </div>
+            <div>
+              <span>Mesa</span>
+              <strong>${escapeHTML(bill.table || tableLabel(state.currentTable))}</strong>
+            </div>
+          </div>
+
+          <div class="receipt-method">
+            <span>${icon("utensils", 20)}</span>
+            <div>
+              <strong>${escapeHTML(bill.business_name || "Restaurante")}</strong>
+              <small>Recibo enviado por administración</small>
+            </div>
+          </div>
+
+          <div class="receipt-lines client-ticket-lines">
             ${(bill.items || [])
               .map(
                 (item) => `
                   <div>
-                    <span>${item.quantity}x ${item.name}</span>
+                    <span>${Number(item.quantity || 0)}x ${escapeHTML(item.name)}</span>
                     <strong>${money(item.total, bill.currency)}</strong>
                   </div>
                 `
               )
               .join("") || "<small>Sin consumos registrados</small>"}
           </div>
-          <div class="receipt-total">
-            <span>Total</span>
-            <strong>${money(bill.total, bill.currency)}</strong>
+
+          <div class="receipt-barcode" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+            <small>${String(request.id || "").replace(/-/g, "").slice(0, 22)}</small>
           </div>
-        </div>
-        ${
-          request.status === "resolved"
-            ? `<div class="chat-bubble guest thanks">Gracias</div>`
-            : `<button class="primary thank-btn" data-thank-bill="${request.id}">${icon("send", 16)} Gracias</button>`
-        }
+
+          ${
+            request.status === "resolved"
+              ? `<div class="receipt-confirmed">${icon("badge-check", 17)} Confirmado</div>`
+              : `<button class="primary thank-btn receipt-thanks" data-thank-bill="${request.id}">${icon("send", 16)} Gracias</button>`
+          }
+          <div class="receipt-cutout-row" aria-hidden="true"></div>
+        </article>
       </div>
     `;
     refreshIcons();
@@ -1255,11 +1318,17 @@ const App = (() => {
       .map(
         (request) => `
               <article class="alert-card alert-${request.request_type}" data-alert-card="${request.id}">
-                <div class="alert-icon">${icon(REQUEST_ICONS[request.request_type] || "bell", 22)}</div>
+                <div class="alert-icon">
+                  ${
+                    REQUEST_IMAGES[request.request_type]
+                      ? `<img class="alert-image" src="${REQUEST_IMAGES[request.request_type]}" alt="">`
+                      : icon(REQUEST_ICONS[request.request_type] || "bell", 22)
+                  }
+                </div>
                 <div>
                   <span>${REQUEST_LABELS[request.request_type] || request.request_type}</span>
-                  <h3>${tableLabel(request.restaurant_tables)}</h3>
-                  ${request.message && !parseBillMessage(request.message) ? `<p>${request.message}</p>` : ""}
+                  <h3><mark class="alert-table-name">${escapeHTML(tableLabel(request.restaurant_tables))}</mark></h3>
+                  ${request.message && !parseBillMessage(request.message) ? `<p>${escapeHTML(request.message)}</p>` : ""}
                   <p>${new Date(request.created_at).toLocaleTimeString("es-CO", {
                     hour: "2-digit",
                     minute: "2-digit"
