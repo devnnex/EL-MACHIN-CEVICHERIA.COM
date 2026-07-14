@@ -31,6 +31,98 @@ const App = (() => {
     { name: "Dúo Mix", prices: { 8: 27000, 12: 30000, 16: 34000 }, detail: "Camarón, pulpo, cebolla, ajo, salsa de tomate, mayonesa, syrup, limón y cilantro." },
     { name: "Bomba Tradicional", prices: { 8: 27000, 12: 30000, 16: 34000 }, detail: "Camarón, caracol, palmitos, pulpo, ropa ahumada, cebolla, ajo, salsa de tomate, mayonesa y syrup." }
   ];
+  const ASSISTANT_SYSTEM_PROMPT = [
+    "Eres el asistente local de El Machín Cevichería.",
+    "Tu trabajo es atender al cliente desde su mesa con tono amable, claro y profesional.",
+    "Entiendes frases naturales para ordenar, pedir la cuenta, llamar al mesero, consultar el menú, preguntar precios o pedir ayuda.",
+    "Cuando un pedido coincide con el menú, calculas cantidad, tamaño, precio unitario y total antes de avisar al equipo.",
+    "Si falta una mesa, no permites enviar pedidos ni solicitudes; primero pides verificar la mesa.",
+    "Si el cliente pregunta por ingredientes o precios, informas sin crear el pedido hasta que exprese intención de ordenar.",
+    "Si no reconoces el producto o el precio exacto, envías la solicitud al equipo para validación y se lo explicas al cliente.",
+    "Siempre corriges ortografía, tildes, mayúsculas, puntos y comas en los mensajes que llegan al administrador.",
+    "No prometes disponibilidad fuera del menú cargado; confirmas con cocina cuando haga falta."
+  ].join("\n");
+
+  const ASSISTANT_INTENTS = {
+    help: [
+      "en que me puedes ayudar",
+      "como me puedes ayudar",
+      "me puedes ayudar",
+      "que puedes hacer",
+      "que haces",
+      "ayudame",
+      "ayuda",
+      "hola",
+      "buenas"
+    ],
+    menu: [
+      "menu",
+      "carta",
+      "opciones",
+      "que tienen",
+      "que venden",
+      "que me recomiendas",
+      "recomiendame",
+      "recomendacion",
+      "platos"
+    ],
+    order: [
+      "quiero pedir",
+      "quiero ordenar",
+      "me gustaria pedir",
+      "me gustaria ordenar",
+      "voy a pedir",
+      "voy a ordenar",
+      "dame",
+      "traeme",
+      "agrega",
+      "anota",
+      "pideme",
+      "ordenar"
+    ],
+    bill: [
+      "cuenta",
+      "factura",
+      "recibo",
+      "cobrar",
+      "pagar",
+      "la cuenta por favor"
+    ],
+    waiter: [
+      "mesero",
+      "mesera",
+      "atiendan",
+      "atender",
+      "venga alguien",
+      "llama a alguien",
+      "necesito atencion"
+    ],
+    inquiry: [
+      "que tiene",
+      "ingredientes",
+      "cuanto vale",
+      "cuanto cuesta",
+      "precio",
+      "precios",
+      "de que es",
+      "como viene"
+    ]
+  };
+
+  const ASSISTANT_NUMBER_WORDS = {
+    un: 1,
+    una: 1,
+    uno: 1,
+    dos: 2,
+    tres: 3,
+    cuatro: 4,
+    cinco: 5,
+    seis: 6,
+    siete: 7,
+    ocho: 8,
+    nueve: 9,
+    diez: 10
+  };
   const state = {
     sb: null,
     page: "",
@@ -557,11 +649,65 @@ const App = (() => {
       .replace(/\s+/g, " ")
       .trim();
 
+  const escapeHTML = (value = "") =>
+    String(value).replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;"
+    }[char]));
+
+  const includesAny = (normalized, phrases = []) =>
+    phrases.some((phrase) => normalized.includes(normalizeText(phrase)));
+
+  const assistantUnderstands = (normalized, intent) =>
+    includesAny(normalized, ASSISTANT_INTENTS[intent] || []);
+
   const sentenceCase = (text = "") => {
     const clean = String(text).trim().replace(/\s+/g, " ");
     if (!clean) return "";
     const sentence = clean.charAt(0).toUpperCase() + clean.slice(1);
     return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
+  };
+
+  const polishGuestText = (text = "") => {
+    const replacements = [
+      [/\bcamarones\b/gi, "camarones"],
+      [/\bcamaron\b/gi, "camarón"],
+      [/\bmaiz\b/gi, "maíz"],
+      [/\blimon\b/gi, "limón"],
+      [/\bhawai\b/gi, "Hawái"],
+      [/\bhawaiano\b/gi, "Hawái"],
+      [/\baji(ll)?o\b/gi, "ajillo"],
+      [/\bduo\b/gi, "dúo"],
+      [/\btrio\b/gi, "trío"],
+      [/\bmenu\b/gi, "menú"],
+      [/\bpor favor\b/gi, "por favor"],
+      [/\bq\b/gi, "que"],
+      [/\bxfa\b/gi, "por favor"]
+    ];
+    const polished = replacements.reduce(
+      (value, [pattern, replacement]) => value.replace(pattern, replacement),
+      String(text).trim().replace(/\s+/g, " ")
+    );
+    return sentenceCase(polished);
+  };
+
+  const assistantMenuSummary = () =>
+    ASSISTANT_MENU.slice(0, 6)
+      .map((item) => item.name)
+      .join(", ");
+
+  const assistantPriceList = (item) =>
+    Object.entries(item.prices)
+      .map(([size, price]) => `${size === "default" ? "precio" : `${size} onzas`}: ${money(price)}`)
+      .join(", ");
+
+  const findQuantityWord = (normalized) => {
+    const words = normalized.split(" ");
+    const found = words.find((word) => ASSISTANT_NUMBER_WORDS[word]);
+    return found ? ASSISTANT_NUMBER_WORDS[found] : null;
   };
 
   const assistantOptions = () => [
@@ -571,13 +717,16 @@ const App = (() => {
       .map((item) => ({
         name: item.name,
         prices: { default: Number(item.price || 0) },
-        detail: item.description || "Producto del menu del restaurante.",
+        detail: item.description || "Producto del menú del restaurante.",
         menu_item_id: item.id
       }))
   ];
 
   const findAssistantItem = (message) => {
-    const normalized = normalizeText(message).replace(/\bhawaiano\b/g, "hawai");
+    const normalized = normalizeText(message)
+      .replace(/\bhawaiano\b/g, "hawai")
+      .replace(/\bcriollo\b/g, "pacaron")
+      .replace(/\bpacaron\b/g, "pacaron");
     let best = null;
     assistantOptions().forEach((item) => {
       const words = normalizeText(item.name).split(" ").filter((word) => word.length > 2);
@@ -599,14 +748,14 @@ const App = (() => {
       : sizes.includes("12")
         ? "12"
         : sizes[0];
-    const quantity = Math.max(1, Number(quantityMatch?.[1] || quantityMatch?.[2] || 1));
+    const quantity = Math.max(1, Number(quantityMatch?.[1] || quantityMatch?.[2] || findQuantityWord(normalized) || 1));
     const price = Number(item.prices[size] || item.prices.default || 0);
     return { item, size, quantity, price };
   };
 
   const assistantSay = (role, text) => {
     state.assistantMessages.push({ role, text });
-    state.assistantMessages = state.assistantMessages.slice(-10);
+    state.assistantMessages = state.assistantMessages.slice(-16);
     renderAssistant();
   };
 
@@ -616,12 +765,12 @@ const App = (() => {
     if (!chat || !suggestions) return;
     const messages = state.assistantMessages.length
       ? state.assistantMessages
-      : [{ role: "bot", text: "Hola. Puedo ayudarte a ordenar camarones, pedir la cuenta o llamar al mesero. Escribe algo como: Camaron Hawai de 12 onzas." }];
+      : [{ role: "bot", text: "Hola. Soy el asistente de la mesa. Puedo ayudarte a ordenar ceviches, consultar precios, pedir la cuenta o llamar al mesero. Escribe, por ejemplo: Quiero un Camarón Hawái de 12 onzas." }];
     chat.innerHTML = messages
-      .map((message) => `<div class="assistant-message ${message.role}">${message.text}</div>`)
+      .map((message) => `<div class="assistant-message ${message.role}">${escapeHTML(message.text)}</div>`)
       .join("");
     chat.scrollTop = chat.scrollHeight;
-    suggestions.innerHTML = ["Camaron Hawai 12 onzas", "Mixto Chipotle 16 onzas", "Quiero pedir la cuenta"]
+    suggestions.innerHTML = ["Camarón Hawái 12 onzas", "Mixto Chipotle 16 onzas", "¿Qué puedes hacer por mí?"]
       .map((text) => `<button type="button" class="chip" data-assistant-suggest="${text}">${text}</button>`)
       .join("");
     refreshIcons();
@@ -644,6 +793,9 @@ const App = (() => {
       null
     );
   };
+
+  const describeAssistantItem = (item) =>
+    `${item.name}: ${item.detail} Precios: ${assistantPriceList(item)}.`;
 
   const addAssistantOrder = async (order, originalMessage) => {
     if (!state.currentTable) {
@@ -680,20 +832,48 @@ const App = (() => {
     if (!text) return;
     assistantSay("user", text);
     const normalized = normalizeText(text);
-    if (normalized.includes("menu") || normalized.includes("opciones")) {
-      assistantSay("bot", `Tenemos opciones como ${ASSISTANT_MENU.slice(0, 5).map((item) => item.name).join(", ")}. Puedes pedir por nombre y onzas.`);
+    const item = findAssistantItem(text);
+    const asksCapabilities = includesAny(normalized, [
+      "en que me puedes ayudar",
+      "como me puedes ayudar",
+      "me puedes ayudar",
+      "que puedes hacer",
+      "que haces",
+      "hola",
+      "buenas"
+    ]) || normalized === "ayuda";
+    const asksMenu = assistantUnderstands(normalized, "menu");
+    const asksInquiry = assistantUnderstands(normalized, "inquiry");
+    const asksBill = assistantUnderstands(normalized, "bill");
+    const asksWaiter = assistantUnderstands(normalized, "waiter");
+    const wantsOrder = assistantUnderstands(normalized, "order") || Boolean(item && !asksInquiry);
+
+    if (asksCapabilities && !wantsOrder && !asksMenu && !asksBill && !asksWaiter) {
+      assistantSay("bot", "Puedo ayudarte a ver opciones del menú, consultar precios, ordenar para tu mesa, pedir la cuenta o llamar al mesero. Si algo no aparece con precio exacto, lo envío al equipo para confirmación.");
+      return;
+    }
+    if (asksMenu && !item) {
+      assistantSay("bot", `Tenemos ceviches y mixtos como ${assistantMenuSummary()}. Puedes escribir el nombre, las onzas y la cantidad; por ejemplo: dos Mixto Chipotle de 16 onzas.`);
+      return;
+    }
+    if (wantsOrder && !item && normalized.split(" ").length <= 3) {
+      assistantSay("bot", `Claro. Puedes pedir opciones como ${assistantMenuSummary()}. Escríbeme el plato, tamaño y cantidad; por ejemplo: quiero dos Camarón Hawái de 12 onzas.`);
+      return;
+    }
+    if (item && (asksInquiry || asksMenu) && !assistantUnderstands(normalized, "order")) {
+      assistantSay("bot", describeAssistantItem(item));
       return;
     }
     if (!state.currentTable) {
       assistantSay("bot", "Primero selecciona tu mesa arriba para poder enviar pedidos o avisos correctamente.");
       return;
     }
-    if (normalized.includes("cuenta")) {
+    if (asksBill) {
       await createRequest("bill");
       assistantSay("bot", "Listo, pedí la cuenta para tu mesa. Cuando el equipo la envíe, aparecerá aquí como recibo.");
       return;
     }
-    if (normalized.includes("mesero") || normalized.includes("atender")) {
+    if (asksWaiter) {
       await createRequest("waiter");
       assistantSay("bot", "Ya llamamos al mesero. Te atenderán en breve.");
       return;
@@ -703,7 +883,7 @@ const App = (() => {
       await addAssistantOrder(order, text);
       return;
     }
-    await createServiceNotification("other", `${tableLabel(state.currentTable)} solicitó: ${sentenceCase(text)}`);
+    await createServiceNotification("other", `${tableLabel(state.currentTable)} solicitó: ${polishGuestText(text)} Validar con cocina o atención.`);
     assistantSay("bot", "No lo encontré con precio exacto en el menú, pero ya envié tu solicitud al equipo para confirmarla.");
   };
 
