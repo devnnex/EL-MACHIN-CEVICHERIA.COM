@@ -1621,29 +1621,35 @@ option {
   display: flex;
   align-items: end;
   justify-content: center;
-  gap: 5px;
-  height: 64px;
-  margin: .75rem auto 1.1rem;
+  gap: 7px;
+  width: min(260px, 82%);
+  height: 82px;
+  margin: 1rem auto 1.35rem;
+  padding-bottom: 16px;
   color: #17191d;
 }
 
 .receipt-barcode span {
-  width: 6px;
+  flex: 1 0 8px;
+  max-width: 14px;
   background: currentColor;
 }
 
 .receipt-barcode span:nth-child(1),
-.receipt-barcode span:nth-child(4) { height: 50px; }
+.receipt-barcode span:nth-child(4) { height: 54px; }
 .receipt-barcode span:nth-child(2),
-.receipt-barcode span:nth-child(6) { height: 38px; width: 10px; }
-.receipt-barcode span:nth-child(3) { height: 54px; width: 4px; }
-.receipt-barcode span:nth-child(5) { height: 46px; width: 12px; }
+.receipt-barcode span:nth-child(6) { height: 42px; flex-basis: 14px; }
+.receipt-barcode span:nth-child(3) { height: 60px; flex-basis: 6px; }
+.receipt-barcode span:nth-child(5) { height: 50px; flex-basis: 16px; }
 
 .receipt-barcode small {
   position: absolute;
-  margin-top: 58px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   font-size: .52rem;
   letter-spacing: .02em;
+  text-align: center;
 }
 
 .client-receipt-ticket .receipt-thanks,
@@ -2178,37 +2184,30 @@ option {
 }
 
 .call-modal {
-  width: min(860px, calc(100vw - 2rem));
+  width: min(520px, calc(100vw - 2rem));
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
   gap: .75rem;
   pointer-events: auto;
-  animation: callModalMove 1.05s ease-in-out infinite;
+  animation: alertFloatIn .24s ease both;
 }
 
 .alert-card {
   position: relative;
   overflow: hidden;
+  min-width: 0;
   color: #17202a;
   box-shadow: 0 14px 32px rgba(22, 28, 36, .08);
-  animation: alertFloatIn .24s ease both, alertBreath 1.1s ease-in-out infinite;
+  animation: alertBreath 1.35s ease-in-out infinite;
 }
 
 .alert-card::after {
-  content: "";
-  position: absolute;
-  inset: auto -20px -34px auto;
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .42);
-  pointer-events: none;
+  display: none;
 }
 
 .alert-card .alert-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius);
 }
 
 .alert-card span,
@@ -2218,26 +2217,26 @@ option {
 }
 
 .alert-card h3 {
-  font-size: clamp(1.35rem, 3vw, 2rem);
-  line-height: 1;
+  font-size: 1.25rem;
+  line-height: 1.1;
 }
 
 .alert-table-name {
-  padding: .15rem .42rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, .62);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: inherit;
 }
 
 .alert-image {
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
-  filter: drop-shadow(0 10px 16px rgba(20, 30, 40, .16));
+  filter: drop-shadow(0 7px 12px rgba(20, 30, 40, .12));
 }
 
 .alert-card.alert-waiter {
-  background: linear-gradient(135deg, #fff8e8, #ffe7ad);
+  background: #fff2d6;
   border-color: #f0c56a;
 }
 
@@ -2247,7 +2246,7 @@ option {
 }
 
 .alert-card.alert-bill {
-  background: linear-gradient(135deg, #e8fff1, #c9f8de);
+  background: #e3f8eb;
   border-color: #75d79c;
 }
 
