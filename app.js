@@ -162,10 +162,10 @@ const App = (() => {
 
   const icon = (name, size = 18) => `<i data-lucide="${name}" style="width:${size}px;height:${size}px"></i>`;
 
-  const money = (value, currency = state.business?.currency || DEFAULT_CURRENCY) =>
+  const money = (value, currency = DEFAULT_CURRENCY) =>
     new Intl.NumberFormat("es-CO", {
       style: "currency",
-      currency,
+      currency: DEFAULT_CURRENCY,
       maximumFractionDigits: 0
     }).format(Number(value || 0));
 
@@ -577,7 +577,7 @@ const App = (() => {
       sent_at: new Date().toISOString(),
       business_name: state.business?.business_name || "Tu restaurante",
       table: tableLabel(session?.restaurant_tables),
-      currency: state.business?.currency || DEFAULT_CURRENCY,
+      currency: DEFAULT_CURRENCY,
       items,
       subtotal,
       total: subtotal
@@ -640,7 +640,7 @@ const App = (() => {
     box.innerHTML = `
       <div class="client-receipt-overlay">
         <article class="client-receipt-ticket" role="dialog" aria-modal="true" aria-label="Cuenta enviada">
-          <div class="receipt-confetti">${request.status === "resolved" ? "✓" : "!"}</div>
+          <div class="receipt-confetti">✓</div>
           <h2>${request.status === "resolved" ? "Gracias" : "Cuenta lista"}</h2>
           <p>${request.status === "resolved" ? "Tu confirmación fue recibida correctamente." : "El equipo envió el recibo de tu mesa."}</p>
 
@@ -1413,7 +1413,7 @@ const App = (() => {
     form.business_name.value = state.business?.business_name || "";
     form.subtitle.value = state.business?.subtitle || "";
     form.accent_color.value = state.business?.accent_color || "#f05a28";
-    form.currency.value = state.business?.currency || DEFAULT_CURRENCY;
+    form.currency.value = DEFAULT_CURRENCY;
     form.logo_url.value = state.business?.logo_url || "";
     form.cover_url.value = state.business?.cover_url || "";
     ["logo_url", "cover_url"].forEach((field) => {
@@ -1667,7 +1667,7 @@ const App = (() => {
       business_name: form.business_name.value.trim() || "Tu restaurante",
       subtitle: form.subtitle.value.trim(),
       accent_color: form.accent_color.value || "#f05a28",
-      currency: form.currency.value || DEFAULT_CURRENCY,
+      currency: DEFAULT_CURRENCY,
       logo_url: form.logo_url.value.trim(),
       cover_url: form.cover_url.value.trim()
     };

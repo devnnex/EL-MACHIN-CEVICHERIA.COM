@@ -1543,8 +1543,8 @@ option {
   color: #fff;
   font-size: 2rem;
   font-weight: 900;
-  background: linear-gradient(135deg, #ff5b35, #ffd166 45%, #2fd17c);
-  box-shadow: 0 15px 34px rgba(240, 90, 40, .26);
+  background: linear-gradient(135deg, #25d366, #08a86b);
+  box-shadow: 0 15px 34px rgba(37, 211, 102, .26);
 }
 
 .receipt-dash {
